@@ -75,6 +75,11 @@ bot.on(message('text'), async (ctx) => {
   }
 });
 
+bot.telegram.setMyCommands([
+  { command: 'start', description: 'Начать диалог' },
+  { command: 'new', description: 'Новый диалог' },
+]);
+
 bot.launch();
 
 process.once('SIGINT', () => bot.stop('SIGINT'));
