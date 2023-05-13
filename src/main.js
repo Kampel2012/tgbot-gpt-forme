@@ -5,15 +5,23 @@ import config from 'config';
 import { ogg } from './ogg.js';
 import { openai } from './openai.js';
 
-console.log(config.get('TEST_ENV'));
+//console.log(config.get('TEST_ENV'));
 
+const SESSION_TIMEOUT = 20 * 60 * 1000;
 const INITIAL_SESSION = {
   messages: [],
 };
 
 const bot = new Telegraf(config.get('TELEGRAM_TOKEN'));
 
+let timerReset = setTimeout(() => {}, SESSION_TIMEOUT);
+
 bot.use(session());
+
+function resetSession(ctx) {
+  ctx.session = INITIAL_SESSION;
+  ctx.reply('Завершение сессии.');
+}
 
 bot.command('new', async (ctx) => {
   ctx.session = INITIAL_SESSION;
@@ -23,6 +31,10 @@ bot.command('new', async (ctx) => {
 bot.command('start', async (ctx) => {
   ctx.session = INITIAL_SESSION;
   await ctx.reply('Жду вашего голосового или текстового сообщения');
+  clearInterval(timerReset);
+  timerReset = setTimeout(() => {
+    resetSession(ctx);
+  }, SESSION_TIMEOUT);
 });
 
 bot.on(message('voice'), async (ctx) => {
@@ -47,6 +59,11 @@ bot.on(message('voice'), async (ctx) => {
     });
 
     await ctx.reply(response.content);
+
+    clearInterval(timerReset);
+    timerReset = setTimeout(() => {
+      resetSession(ctx);
+    }, SESSION_TIMEOUT);
   } catch (e) {
     console.log('Error while voice message', e.message);
   }
@@ -70,6 +87,10 @@ bot.on(message('text'), async (ctx) => {
     });
 
     await ctx.reply(response.content);
+    clearInterval(timerReset);
+    timerReset = setTimeout(() => {
+      resetSession(ctx);
+    }, SESSION_TIMEOUT);
   } catch (e) {
     console.log('Error while voice message', e.message);
   }
@@ -77,7 +98,7 @@ bot.on(message('text'), async (ctx) => {
 
 bot.telegram.setMyCommands([
   { command: 'start', description: 'Начать диалог' },
-  { command: 'new', description: 'Новый диалог' },
+  /*   { command: 'new', description: 'Новый диалог' }, */
 ]);
 
 bot.launch();
