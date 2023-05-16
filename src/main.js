@@ -5,23 +5,34 @@ import config from 'config';
 import { ogg } from './ogg.js';
 import { openai } from './openai.js';
 
-//console.log(config.get('TEST_ENV'));
-
-const SESSION_TIMEOUT = 20 * 60 * 1000;
 const INITIAL_SESSION = {
   messages: [],
 };
 
+// ======
 const bot = new Telegraf(config.get('TELEGRAM_TOKEN'));
 
-let timerReset = setTimeout(() => {}, SESSION_TIMEOUT);
+export async function processTextToChat(ctx, content) {
+  try {
+    // пушим сообщения пользователя в сессию (в контекст)
+    ctx.session.messages.push({ role: openai.roles.USER, content });
+    // пушим сообщения бота в сессию (в контекст)
+    const response = await openai.chat(ctx.session.messages);
+    ctx.session.messages.push({
+      role: openai.roles.ASSISTANT,
+      content: response.content,
+    });
+    await ctx.reply(response.content);
+  } catch (e) {
+    console.log('Error while proccesing text to gpt', e.message);
+  }
+}
 
+// говорим боту, чтобы он использовал session
 bot.use(session());
 
-function resetSession(ctx) {
-  ctx.session = INITIAL_SESSION;
-  ctx.reply('Завершение сессии.');
-}
+// при вызове команды new и start бот регистрирует новую беседу,
+// новый контекст
 
 bot.command('new', async (ctx) => {
   ctx.session = INITIAL_SESSION;
@@ -31,10 +42,6 @@ bot.command('new', async (ctx) => {
 bot.command('start', async (ctx) => {
   ctx.session = INITIAL_SESSION;
   await ctx.reply('Жду вашего голосового или текстового сообщения');
-  clearInterval(timerReset);
-  timerReset = setTimeout(() => {
-    resetSession(ctx);
-  }, SESSION_TIMEOUT);
 });
 
 bot.on(message('voice'), async (ctx) => {
@@ -45,25 +52,10 @@ bot.on(message('voice'), async (ctx) => {
     const userId = String(ctx.message.from.id);
     const oggPath = await ogg.create(link.href, userId);
     const mp3Path = await ogg.toMp3(oggPath, userId);
-
+    removeFile(oggPath);
     const text = await openai.transcription(mp3Path);
     await ctx.reply(code(`Ваш запрос: ${text}`));
-
-    ctx.session.messages.push({ role: openai.roles.USER, content: text });
-
-    const response = await openai.chat(ctx.session.messages);
-
-    ctx.session.messages.push({
-      role: openai.roles.ASSISTANT,
-      content: response.content,
-    });
-
-    await ctx.reply(response.content);
-
-    clearInterval(timerReset);
-    timerReset = setTimeout(() => {
-      resetSession(ctx);
-    }, SESSION_TIMEOUT);
+    await processTextToChat(ctx, text);
   } catch (e) {
     console.log('Error while voice message', e.message);
   }
@@ -73,32 +65,15 @@ bot.on(message('text'), async (ctx) => {
   ctx.session ??= INITIAL_SESSION;
   try {
     await ctx.reply(code('Сообщение принял. Жду ответ от сервера...'));
-
-    ctx.session.messages.push({
-      role: openai.roles.USER,
-      content: ctx.message.text,
-    });
-
-    const response = await openai.chat(ctx.session.messages);
-
-    ctx.session.messages.push({
-      role: openai.roles.ASSISTANT,
-      content: response.content,
-    });
-
-    await ctx.reply(response.content);
-    clearInterval(timerReset);
-    timerReset = setTimeout(() => {
-      resetSession(ctx);
-    }, SESSION_TIMEOUT);
+    await processTextToChat(ctx, ctx.message.text);
   } catch (e) {
-    console.log('Error while voice message', e.message);
+    console.log(`Error while voice message`, e.message);
   }
 });
 
 bot.telegram.setMyCommands([
   { command: 'start', description: 'Начать диалог' },
-  /*   { command: 'new', description: 'Новый диалог' }, */
+  { command: 'new', description: 'Новый диалог' },
 ]);
 
 bot.launch();
