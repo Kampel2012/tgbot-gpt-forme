@@ -4,11 +4,10 @@ import installer from '@ffmpeg-installer/ffmpeg';
 import { createWriteStream } from 'fs';
 import { dirname, resolve } from 'path';
 import { fileURLToPath } from 'url';
-import { removeFile } from './utils.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-class OggConventer {
+class OggConverter {
   constructor() {
     ffmpeg.setFfmpegPath(installer.path);
   }
@@ -20,10 +19,7 @@ class OggConventer {
         ffmpeg(input)
           .inputOption('-t 30')
           .output(outputPath)
-          .on('end', () => {
-            removeFile(input);
-            resolve(outputPath);
-          })
+          .on('end', () => resolve(outputPath))
           .on('error', (err) => reject(err.message))
           .run();
       });
@@ -40,7 +36,7 @@ class OggConventer {
         url,
         responseType: 'stream',
       });
-      return new Promise((resolve, reject) => {
+      return new Promise((resolve) => {
         const stream = createWriteStream(oggPath);
         response.data.pipe(stream);
         stream.on('finish', () => resolve(oggPath));
@@ -51,4 +47,4 @@ class OggConventer {
   }
 }
 
-export const ogg = new OggConventer();
+export const ogg = new OggConverter();
