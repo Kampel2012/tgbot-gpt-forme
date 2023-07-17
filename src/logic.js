@@ -4,7 +4,15 @@ export const INITIAL_SESSION = {
   messages: [],
 };
 
+export const dataBase = {};
+
 export async function initCommand(ctx) {
+  dataBase[ctx.from.id] = 0;
+  ctx.session = { ...INITIAL_SESSION };
+  await ctx.reply('Жду вашего голосового или текстового сообщения');
+}
+
+export async function clearCommand(ctx) {
   ctx.session = { ...INITIAL_SESSION };
   await ctx.reply('Жду вашего голосового или текстового сообщения');
 }
